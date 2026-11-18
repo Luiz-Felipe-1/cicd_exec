@@ -1,0 +1,28 @@
+name: CI Pipeline Básico
+
+# Quando o pipeline será executado
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build-and-test:
+    # Sistema operacional onde o job vai rodar
+    runs-on: ubuntu-latest
+name: CI Pipeline Básico
+
+# Quando o pipeline será executado
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build-and-test:
+    # Sistema operacional onde o job vai rodar
+    runs-on: ubuntu-latest
+
+    
