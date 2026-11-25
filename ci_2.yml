@@ -1,19 +1,24 @@
 
-name: CI/CD - Segurança Python e AWS S3
+name: CI/CD - Python Security e AWS S3
 
 on:
   push:
     branches: [main]
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 
 jobs:
-  security-and-upload:
-    name: Teste de Segurança e Upload S3
+
+  # FASE 1 - VALIDACAO E SEGURANCA
+  security:
+    name: Validacao e Testes Python
     runs-on: ubuntu-latest
 
     steps:
-      # 1. Baixar o código
-      - name: Checkout do repositório
+
+      # 1. Checkout
+      - name: Checkout do repositorio
         uses: actions/checkout@v4
 
       # 2. Configurar Python
@@ -22,19 +27,78 @@ jobs:
         with:
           python-version: '3.11'
 
-      # 3. Instalar ferramenta de segurança
-      - name: Instalar Bandit
+      # 3. Validar arquivos e diretorios
+      - name: Validar estrutura do projeto
+        run: |
+          echo "===== ESTRUTURA DO PROJETO ====="
+          pwd
+          find . -maxdepth 3 -type f | sort
+
+          echo "===== VALIDANDO DIRETORIOS ====="
+
+          for dir in codigo tests .github/workflows; do
+            if [ -d "$dir" ]; then
+              echo "[OK] Diretorio encontrado: $dir"
+            else
+              echo "[ERRO] Diretorio ausente: $dir"
+              exit 1
+            fi
+          done
+
+          echo "===== VALIDANDO ARQUIVOS ====="
+
+          for file in \
+            codigo/__init__.py \
+            codigo/main.py \
+            tests/test_main.py \
+            requirements.txt; do
+
+            if [ -f "$file" ]; then
+              echo "[OK] Arquivo encontrado: $file"
+            else
+              echo "[ERRO] Arquivo ausente: $file"
+              exit 1
+            fi
+          done
+
+          echo "Estrutura validada com sucesso!"
+
+      # 4. Instalar dependencias
+      - name: Instalar dependencias
         run: |
           python -m pip install --upgrade pip
-          pip install bandit
+          pip install -r requirements.txt
 
-      # 4. Executar análise de segurança
-      - name: Teste de segurança com Bandit
+      # 5. Configurar caminho Python
+      - name: Configurar PYTHONPATH
         run: |
-          bandit -ll main.py
+          echo "PYTHONPATH=$GITHUB_WORKSPACE" >> $GITHUB_ENV
 
-      # 5. Configurar credenciais AWS
-      - name: Configurar acesso AWS
+      # 6. Testes unitarios
+      - name: Executar testes Pytest
+        run: |
+          python -m pytest tests/ -v
+
+      # 7. Analise de seguranca
+      - name: Analise de seguranca Bandit
+        run: |
+          bandit -ll -r codigo/
+
+  # FASE 2 - DEPLOY AWS
+  deploy:
+    name: Criar S3 e enviar codigo
+    needs: security
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+
+    steps:
+
+      # 1. Checkout
+      - name: Checkout do repositorio
+        uses: actions/checkout@v4
+
+      # 2. Configurar AWS
+      - name: Configurar credenciais AWS
         uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
@@ -42,25 +106,44 @@ jobs:
           aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
           aws-region: us-east-1
 
-      # 6. Criar bucket S3
-      - name: Criar bucket AWS S3
+      # 3. Validar variavel do bucket
+      - name: Validar nome do bucket
         env:
           BUCKET_NAME: ${{ vars.S3_BUCKET_NAME }}
         run: |
-          if aws s3api head-bucket --bucket "$BUCKET_NAME" 2>/dev/null; then
-            echo "Bucket já existe."
+          if [ -z "$BUCKET_NAME" ]; then
+            echo "[ERRO] S3_BUCKET_NAME nao configurado"
+            exit 1
+          fi
+
+          echo "[OK] Nome do bucket configurado"
+
+      # 4. Criar bucket
+      - name: Criar bucket S3
+        env:
+          BUCKET_NAME: ${{ vars.S3_BUCKET_NAME }}
+        run: |
+          if aws s3api head-bucket \
+            --bucket "$BUCKET_NAME" 2>/dev/null; then
+
+            echo "Bucket ja existe"
+
           else
-            echo "Criando bucket S3..."
+
+            echo "Criando bucket..."
+
             aws s3api create-bucket \
               --bucket "$BUCKET_NAME" \
               --region us-east-1
+
           fi
 
-      # 7. Salvar arquivo Python no S3
-      - name: Upload do código Python para S3
+      # 5. Upload Python
+      - name: Enviar codigo para AWS S3
         env:
           BUCKET_NAME: ${{ vars.S3_BUCKET_NAME }}
         run: |
-          aws s3 cp main.py s3://$BUCKET_NAME/codigo/main.py
+          aws s3 cp codigo/main.py \
+            s3://$BUCKET_NAME/codigo/main.py
 
-          echo "Upload realizado com sucesso!"
+          echo "Upload concluido com sucesso!"
