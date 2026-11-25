@@ -1,0 +1,27 @@
+name: CI Pipeline Básico
+
+# Quando o pipeline será executado
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build-and-test:
+    # Sistema operacional onde o job vai rodar
+    runs-on: ubuntu-latest
+steps:
+      # 1. Baixa o código do repositório
+      - name: Checkout do código
+        uses: actions/checkout@v4
+
+      # 2. Executa comandos simples de verificação
+      - name: Verificar estrutura de arquivos
+        run: |
+          echo "Iniciando pipeline..."
+          ls -la
+
+      # 3. Exemplo de execução de testes
+      - name: Rodar testes
+        run: echo "Testes concluídos com sucesso!"
