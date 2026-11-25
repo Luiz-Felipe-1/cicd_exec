@@ -1,87 +1,74 @@
-name: CI/CD - Testes Paralelos e Execução Python
+
+name: CI/CD - Segurança Python e AWS S3
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   pull_request:
-    branches: [ main ]
+    branches: [main]
   workflow_dispatch:
 
 jobs:
-  # =========================================================================
-  # FASE 1: CONTINUOUS INTEGRATION (CI) - Jobs rodando em paralelo
-  # =========================================================================
-  ci-lint-qualidade:
-    name: CI - Lint (Flake8)
+  security:
+    name: Análise de Segurança e Testes
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout do repositório
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Configurar Python 3.11
+      - name: Configurar Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-          cache: 'pip'
 
       - name: Instalar dependências
         run: |
-          python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Verificar padrões de código nos arquivos Python
+      - name: Executar testes unitários
         run: |
-          flake8 main.py test_main.py --max-line-length=100 --show-source --statistics
+          pytest tests/ -v
 
-  ci-testes-unitarios:
-    name: CI - Testes Automatizados (Pytest)
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout do repositório
-        uses: actions/checkout@v4
-
-      - name: Configurar Python 3.11
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-          cache: 'pip'
-
-      - name: Instalar dependências
+      - name: Análise de segurança Bandit
         run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          bandit -ll -r codigo/
 
-      - name: Executar suíte de testes (test_main.py)
-        run: |
-          pytest test_main.py -v
-
-  # =========================================================================
-  # FASE 2: CONTINUOUS DEPLOYMENT / EXECUTION (CD) - Execução Sequencial Final
-  # =========================================================================
-  cd-execucao-producao:
-    name: CD - Executar Programa Principal (main.py)
-    # Só inicia quando os DOIS jobs paralelos de CI acima terminarem com sucesso
-    needs: [ci-lint-qualidade, ci-testes-unitarios]
-    # Em Pull Requests apenas valida o CI; só executa o CD ao fazer merge/push na main
+  deploy:
+    name: Criar S3 e enviar código
+    needs: security
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
+
     steps:
-      - name: Step 1 - Checkout do código aprovado
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Step 2 - Configurar Python 3.11
-        uses: actions/setup-python@v5
+      - name: Configurar AWS
+        uses: aws-actions/configure-aws-credentials@v4
         with:
-          python-version: '3.11'
-          cache: 'pip'
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: us-east-1
 
-      - name: Step 3 - Instalar bibliotecas do requirements.txt
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-
-      - name: Step 4 - Executar main.py em Produção
+      - name: Criar bucket S3
         env:
-          AMBIENTE: producao
+          BUCKET_NAME: ${{ vars.S3_BUCKET_NAME }}
         run: |
-          python main.py
+          if aws s3api head-bucket --bucket "$BUCKET_NAME" 2>/dev/null; then
+            echo "Bucket já existe"
+          else
+            aws s3api create-bucket \
+              --bucket "$BUCKET_NAME" \
+              --region us-east-1
+          fi
+
+      - name: Upload do arquivo Python
+        env:
+          BUCKET_NAME: ${{ vars.S3_BUCKET_NAME }}
+        run: |
+          aws s3 cp codigo/main2.py \
+            s3://$BUCKET_NAME/codigo/main2.py
+
+          echo "Upload concluído!"
