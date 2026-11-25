@@ -1,0 +1,66 @@
+
+name: CI/CD - Segurança Python e AWS S3
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  security-and-upload:
+    name: Teste de Segurança e Upload S3
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. Baixar o código
+      - name: Checkout do repositório
+        uses: actions/checkout@v4
+
+      # 2. Configurar Python
+      - name: Configurar Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      # 3. Instalar ferramenta de segurança
+      - name: Instalar Bandit
+        run: |
+          python -m pip install --upgrade pip
+          pip install bandit
+
+      # 4. Executar análise de segurança
+      - name: Teste de segurança com Bandit
+        run: |
+          bandit -ll main.py
+
+      # 5. Configurar credenciais AWS
+      - name: Configurar acesso AWS
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
+          aws-region: us-east-1
+
+      # 6. Criar bucket S3
+      - name: Criar bucket AWS S3
+        env:
+          BUCKET_NAME: ${{ vars.S3_BUCKET_NAME }}
+        run: |
+          if aws s3api head-bucket --bucket "$BUCKET_NAME" 2>/dev/null; then
+            echo "Bucket já existe."
+          else
+            echo "Criando bucket S3..."
+            aws s3api create-bucket \
+              --bucket "$BUCKET_NAME" \
+              --region us-east-1
+          fi
+
+      # 7. Salvar arquivo Python no S3
+      - name: Upload do código Python para S3
+        env:
+          BUCKET_NAME: ${{ vars.S3_BUCKET_NAME }}
+        run: |
+          aws s3 cp main.py s3://$BUCKET_NAME/codigo/main.py
+
+          echo "Upload realizado com sucesso!"
