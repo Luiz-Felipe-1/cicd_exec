@@ -1,3 +1,5 @@
+name: CI Pipeline Básico
+
 # Quando o pipeline será executado
 on:
   push:
@@ -9,6 +11,7 @@ jobs:
   build-and-test:
     # Sistema operacional onde o job vai rodar
     runs-on: ubuntu-latest
+name: CI Pipeline Básico
 
 # Quando o pipeline será executado
 on:
