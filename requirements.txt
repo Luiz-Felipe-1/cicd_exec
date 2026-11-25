@@ -1,4 +1,5 @@
 requests
 pandas
-pytest
 flake8
+bandit==1.8.6
+pytest==8.4.2
