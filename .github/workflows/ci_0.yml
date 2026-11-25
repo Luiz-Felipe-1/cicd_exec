@@ -68,7 +68,7 @@ jobs:
         env:
           BUCKET_NAME: ${{ vars.S3_BUCKET_NAME }}
         run: |
-          aws s3 cp codigo/main2.py \
-            s3://$BUCKET_NAME/codigo/main2.py
+          aws s3 cp codigo/main.py \
+            s3://$BUCKET_NAME/codigo/main.py
 
           echo "Upload concluído!"
