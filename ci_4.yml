@@ -1,0 +1,39 @@
+name: Pipeline Java CI
+
+on:
+  push:
+    branches: [ "main" ]
+
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build:
+    name: Compilar e testar Java
+    runs-on: ubuntu-latest
+
+    steps:
+
+      - name: Baixar o código
+        uses: actions/checkout@v4
+
+      - name: Configurar Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+
+      - name: Verificar versão do Java
+        run: java -version
+
+      - name: Compilar e executar testes
+        run: mvn -B clean verify
+
+      - name: Publicar arquivo JAR
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: aplicacao-java
+          path: target/pipeline-java-1.0.0.jar
+          if-no-files-found: error
